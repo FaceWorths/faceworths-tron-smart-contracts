@@ -2,12 +2,17 @@ pragma solidity ^0.4.23;
 
 contract FaceToken {
 
+  address public owner;
   uint256 totalSupply_;
   mapping(address => uint256) balances;
   mapping(address => mapping(address => uint256)) internal allowed;
 
   event Transfer(address indexed from, address indexed to, uint tokens);
   event Approval(address indexed tokenOwner, address indexed spender, uint tokens);
+
+  constructor() public {
+    owner = msg.sender;
+  }
 
   function totalSupply()
     public
