@@ -8,7 +8,10 @@ contract FaceWorthPollFactory is Owned {
 
   using SafeMath for uint256;
 
-  enum Stage {COMMITTING, REVEALING, CANCELLED, ENDED}
+  uint8 public constant COMMITTING = 1;
+  uint8 public constant REVEALING = 2;
+  uint8 public constant CANCELLED = 3;
+  uint8 public constant ENDED = 4;
 
   struct FaceWorthPoll {
     address creator;
@@ -16,7 +19,7 @@ contract FaceWorthPollFactory is Owned {
     uint startingBlock;
     uint commitEndingBlock;
     uint revealEndingBlock;
-    Stage currentStage;
+    uint8 currentStage;
 
     mapping(address => bytes32) saltedWorthHashBy;
     mapping(address => uint8) worthBy;
@@ -73,7 +76,7 @@ contract FaceWorthPollFactory is Owned {
     poll.startingBlock = block.number;
     poll.commitEndingBlock = poll.startingBlock + _blocksBeforeReveal;
     poll.revealEndingBlock = poll.commitEndingBlock + _blocksBeforeEnd;
-    poll.currentStage = Stage.COMMITTING;
+    poll.currentStage = COMMITTING;
 
     bytes32 hash = keccak256(abi.encodePacked(poll.creator, poll.faceHash, poll.startingBlock));
     polls[hash] = poll;
@@ -91,7 +94,7 @@ contract FaceWorthPollFactory is Owned {
   function commit(bytes32 hash, bytes32 _saltedWorthHash) payable external {
     FaceWorthPoll storage poll = polls[hash];
     require(!poll.committedBy[msg.sender]);
-    require(poll.currentStage == Stage.COMMITTING && msg.value == stake);
+    require(poll.currentStage == COMMITTING && msg.value == stake);
     poll.saltedWorthHashBy[msg.sender] = _saltedWorthHash;
     poll.committedBy[msg.sender] = true;
     poll.participants.push(msg.sender);
@@ -101,7 +104,7 @@ contract FaceWorthPollFactory is Owned {
     FaceWorthPoll storage poll = polls[hash];
     require(poll.committedBy[msg.sender]);
     require(!poll.revealedBy[msg.sender]);
-    require(poll.currentStage == Stage.REVEALING);
+    require(poll.currentStage == REVEALING);
     require(poll.saltedWorthHashBy[msg.sender] == keccak256(abi.encodePacked(concat(_salt, _worth))));
     require(_worth >= 0 && _worth <= 100);
     poll.worthBy[msg.sender] = _worth;
@@ -112,24 +115,24 @@ contract FaceWorthPollFactory is Owned {
   function cancel(bytes32 hash) external {
     FaceWorthPoll storage poll = polls[hash];
     require(poll.creator == msg.sender);
-    require(poll.currentStage == Stage.COMMITTING);
-    poll.currentStage = Stage.CANCELLED;
-    emit StageChange(hash, poll.currentStage, Stage.COMMITTING);
+    require(poll.currentStage == COMMITTING);
+    poll.currentStage = CANCELLED;
+    emit StageChange(hash, poll.currentStage, COMMITTING);
     refund(hash);
   }
 
   // this function should be called every 3 seconds (Tron block time)
   function checkBlockNumber(bytes32 hash) external {
     FaceWorthPoll storage poll = polls[hash];
-    if (poll.currentStage != Stage.CANCELLED && poll.currentStage != Stage.ENDED) {
+    if (poll.currentStage != CANCELLED && poll.currentStage != ENDED) {
       if (block.number > poll.commitEndingBlock) {
         if (poll.participants.length < minParticipants) {
-          poll.currentStage = Stage.CANCELLED;
-          emit StageChange(hash, poll.currentStage, Stage.COMMITTING);
+          poll.currentStage = CANCELLED;
+          emit StageChange(hash, poll.currentStage, COMMITTING);
           refund(hash);
         } else if (block.number <= poll.revealEndingBlock) {
-          poll.currentStage = Stage.REVEALING;
-          emit StageChange(hash, poll.currentStage, Stage.COMMITTING);
+          poll.currentStage = REVEALING;
+          emit StageChange(hash, poll.currentStage, COMMITTING);
         } else {
           endPoll(hash);
         }
@@ -139,7 +142,7 @@ contract FaceWorthPollFactory is Owned {
 
   function refund(bytes32 hash) private {
     FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage == Stage.CANCELLED);
+    require(poll.currentStage == CANCELLED);
     for (uint i = 0; i < poll.participants.length; i++) {
       if (!poll.refunded[poll.participants[i]]) {
         poll.refunded[poll.participants[i]] = true;
@@ -151,8 +154,8 @@ contract FaceWorthPollFactory is Owned {
 
   function endPoll(bytes32 hash) private {
     FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage != Stage.ENDED);
-    poll.currentStage = Stage.ENDED;
+    require(poll.currentStage != ENDED);
+    poll.currentStage = ENDED;
 
     if (poll.revealCount > 0) {
       // sort the participants by their worth from low to high using Counting Sort
@@ -189,7 +192,7 @@ contract FaceWorthPollFactory is Owned {
 
     rewardFaceTokens(hash);
 
-    emit StageChange(hash, poll.currentStage, Stage.REVEALING);
+    emit StageChange(hash, poll.currentStage, REVEALING);
   }
 
   function rewardFaceTokens(bytes32 hash) private {
@@ -339,6 +342,11 @@ contract FaceWorthPollFactory is Owned {
     }
   }
 
+  function getCurrentStage(bytes32 hash) external view returns (uint8) {
+    FaceWorthPoll storage poll = polls[hash];
+    return poll.currentStage;
+  }
+
   function getNumberOfParticipants(bytes32 hash) external view returns (uint) {
     FaceWorthPoll storage poll = polls[hash];
     return poll.participants.length;
@@ -346,19 +354,19 @@ contract FaceWorthPollFactory is Owned {
 
   function getParticipants(bytes32 hash) external view returns (address[]) {
     FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage != Stage.COMMITTING);
+    require(poll.currentStage != COMMITTING);
     return poll.participants;
   }
 
   function getWorthBy(bytes32 hash, address _who) external view returns (uint8) {
     FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage == Stage.ENDED);
+    require(poll.currentStage == ENDED);
     return poll.worthBy[_who];
   }
 
   function getWinners(bytes32 hash) external view returns (address[]) {
     FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage == Stage.ENDED);
+    require(poll.currentStage == ENDED);
     return poll.winners;
   }
 
@@ -456,7 +464,7 @@ contract FaceWorthPollFactory is Owned {
 
   event MinBlocksBeforeEndUpdate(uint newMinBlocksBeforeUpdate, uint oldMinBlocksBeforeUpdate);
 
-  event StageChange(bytes32 hash, Stage newStage, Stage oldStage);
+  event StageChange(bytes32 hash, uint8 newStage, uint8 oldStage);
 
   event Refund(bytes32 hash, address recepient, uint fund);
 }
