@@ -1,5 +1,5 @@
-// var MyContract = artifacts.require("./MyContract.sol");
+const FaceToken = artifacts.require("../contracts/FaceToken.sol");
 
 module.exports = function(deployer) {
-  // deployer.deploy(MyContract);
+  deployer.deploy(FaceToken);
 };
