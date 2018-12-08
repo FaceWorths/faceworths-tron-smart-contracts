@@ -34,7 +34,7 @@ contract FaceWorthPollFactory is Owned {
 
   uint public stake = 100000000; // every participant stake 100 trx
   uint public minParticipants = 3;
-  uint public maxParticipants = 10000;
+  uint public maxParticipants = 100000;
   uint public winnersPerThousand = 382;   // 1000 * distPercentage / winnersPerThousand must be greater than 100,
   uint public distPercentage = 90; // so that winners prize is greater than the stake
   uint public minBlocksBeforeReveal = 10; // 10 blocks is about 30 seconds
@@ -49,14 +49,16 @@ contract FaceWorthPollFactory is Owned {
   constructor(address _faceTokenAddress) public {
     faceTokenAddress = _faceTokenAddress;
     FaceToken faceToken = FaceToken(faceTokenAddress);
-    faceTokenRewardPool = faceToken.totalSupply() * 80 / 100;
+    faceTokenRewardPool = faceToken.totalSupply() * 618 / 1000;
     oneFace = 10 ** faceToken.decimals();
   }
 
   event FaceWorthPollCreated (
     bytes32 indexed hash,
     address indexed creator,
-    uint blockNumber
+    uint startingBlock,
+    uint commitEndingBlock,
+    uint revealEndingBlock
   );
 
   function createFaceWorthPoll(
@@ -70,100 +72,102 @@ contract FaceWorthPollFactory is Owned {
     require(_blocksBeforeReveal >= minBlocksBeforeReveal);
     require(_blocksBeforeEnd >= minBlocksBeforeEnd);
 
-    FaceWorthPoll memory poll;
-    poll.creator = msg.sender;
-    poll.faceHash = _faceHash;
-    poll.startingBlock = block.number;
-    poll.commitEndingBlock = poll.startingBlock + _blocksBeforeReveal;
-    poll.revealEndingBlock = poll.commitEndingBlock + _blocksBeforeEnd;
-    poll.currentStage = COMMITTING;
-
-    bytes32 hash = keccak256(abi.encodePacked(poll.creator, poll.faceHash, poll.startingBlock));
-    polls[hash] = poll;
+    bytes32 hash = keccak256(abi.encodePacked(msg.sender, _faceHash, block.number));
+    polls[hash].creator = msg.sender;
+    polls[hash].faceHash = _faceHash;
+    polls[hash].startingBlock = block.number;
+    polls[hash].commitEndingBlock = block.number + _blocksBeforeReveal;
+    polls[hash].revealEndingBlock = polls[hash].commitEndingBlock + _blocksBeforeEnd;
+    polls[hash].currentStage = COMMITTING;
     pollCount++;
 
     emit FaceWorthPollCreated(
-      hash,
-      msg.sender,
-      block.number
+        hash,
+        msg.sender,
+        block.number,
+        polls[hash].commitEndingBlock,
+        polls[hash].revealEndingBlock
     );
 
     return hash;
   }
 
-  function commit(bytes32 hash, bytes32 _saltedWorthHash) payable external {
-    FaceWorthPoll storage poll = polls[hash];
-    require(!poll.committedBy[msg.sender]);
-    require(poll.currentStage == COMMITTING && msg.value == stake);
-    poll.saltedWorthHashBy[msg.sender] = _saltedWorthHash;
-    poll.committedBy[msg.sender] = true;
-    poll.participants.push(msg.sender);
+  function commit(bytes32 _hash, bytes32 _saltedWorthHash) payable external {
+    require(!polls[_hash].committedBy[msg.sender]);
+    require(polls[_hash].participants.length < maxParticipants);
+    require(polls[_hash].currentStage == COMMITTING && msg.value == stake);
+
+    polls[_hash].saltedWorthHashBy[msg.sender] = _saltedWorthHash;
+    polls[_hash].committedBy[msg.sender] = true;
+    polls[_hash].participants.push(msg.sender);
+    if(polls[_hash].participants.length >= maxParticipants) {
+      polls[_hash].currentStage = REVEALING;
+      emit StageChange(_hash, REVEALING, COMMITTING);
+    }
   }
 
-  function reveal(bytes32 hash, string _salt, uint8 _worth) external {
-    FaceWorthPoll storage poll = polls[hash];
-    require(poll.committedBy[msg.sender]);
-    require(!poll.revealedBy[msg.sender]);
-    require(poll.currentStage == REVEALING);
-    require(poll.saltedWorthHashBy[msg.sender] == keccak256(abi.encodePacked(concat(_salt, _worth))));
+  function reveal(bytes32 _hash, string _salt, uint8 _worth) external {
+    require(polls[_hash].committedBy[msg.sender]);
+    require(!polls[_hash].revealedBy[msg.sender]);
+    require(polls[_hash].currentStage == REVEALING);
     require(_worth >= 0 && _worth <= 100);
-    poll.worthBy[msg.sender] = _worth;
-    poll.revealedBy[msg.sender] = true;
-    poll.revealCount++;
+    require(polls[_hash].saltedWorthHashBy[msg.sender] == keccak256(abi.encodePacked(concat(_salt, _worth))));
+
+    polls[_hash].worthBy[msg.sender] = _worth;
+    polls[_hash].revealedBy[msg.sender] = true;
+    polls[_hash].revealCount++;
+    emit Reveal(_hash, msg.sender, _worth);
   }
 
-  function cancel(bytes32 hash) external {
-    FaceWorthPoll storage poll = polls[hash];
-    require(poll.creator == msg.sender);
-    require(poll.currentStage == COMMITTING);
-    poll.currentStage = CANCELLED;
-    emit StageChange(hash, poll.currentStage, COMMITTING);
-    refund(hash);
+  function cancel(bytes32 _hash) external {
+    require(polls[_hash].creator == msg.sender);
+    require(polls[_hash].currentStage == COMMITTING);
+
+    polls[_hash].currentStage = CANCELLED;
+    emit StageChange(_hash, CANCELLED, COMMITTING);
+    refund(_hash);
   }
 
   // this function should be called every 3 seconds (Tron block time)
-  function checkBlockNumber(bytes32 hash) external {
-    FaceWorthPoll storage poll = polls[hash];
-    if (poll.currentStage != CANCELLED && poll.currentStage != ENDED) {
-      if (block.number > poll.commitEndingBlock) {
-        if (poll.participants.length < minParticipants) {
-          poll.currentStage = CANCELLED;
-          emit StageChange(hash, poll.currentStage, COMMITTING);
-          refund(hash);
-        } else if (block.number <= poll.revealEndingBlock) {
-          poll.currentStage = REVEALING;
-          emit StageChange(hash, poll.currentStage, COMMITTING);
+  function checkBlockNumber(bytes32 _hash) external {
+    if (polls[_hash].currentStage != CANCELLED && polls[_hash].currentStage != ENDED) {
+      if (block.number > polls[_hash].commitEndingBlock) {
+        if (polls[_hash].participants.length < minParticipants) {
+          polls[_hash].currentStage = CANCELLED;
+          emit StageChange(_hash, polls[_hash].currentStage, COMMITTING);
+          refund(_hash);
+        } else if (block.number <= polls[_hash].revealEndingBlock) {
+          polls[_hash].currentStage = REVEALING;
+          emit StageChange(_hash, REVEALING, COMMITTING);
         } else {
-          endPoll(hash);
+          endPoll(_hash);
         }
       }
     }
   }
 
-  function refund(bytes32 hash) private {
-    FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage == CANCELLED);
-    for (uint i = 0; i < poll.participants.length; i++) {
-      if (!poll.refunded[poll.participants[i]]) {
-        poll.refunded[poll.participants[i]] = true;
-        poll.participants[i].transfer(stake);
-        emit Refund(hash, poll.participants[i], stake);
+  function refund(bytes32 _hash) private {
+    require(polls[_hash].currentStage == CANCELLED);
+    for (uint i = 0; i < polls[_hash].participants.length; i++) {
+      if (!polls[_hash].refunded[polls[_hash].participants[i]]) {
+        polls[_hash].refunded[polls[_hash].participants[i]] = true;
+        polls[_hash].participants[i].transfer(stake);
+        emit Refund(_hash, polls[_hash].participants[i], stake);
       }
     }
   }
 
-  function endPoll(bytes32 hash) private {
-    FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage != ENDED);
-    poll.currentStage = ENDED;
+  function endPoll(bytes32 _hash) private {
+    require(polls[_hash].currentStage != ENDED);
+    polls[_hash].currentStage = ENDED;
 
-    if (poll.revealCount > 0) {
+    if (polls[_hash].revealCount > 0) {
       // sort the participants by their worth from low to high using Counting Sort
-      address[] memory sortedParticipants = sortParticipants(hash);
+      address[] memory sortedParticipants = sortParticipants(_hash);
 
-      uint totalWorth = getTotalWorth(hash);
+      uint totalWorth = getTotalWorth(_hash);
       // find turning point where the right gives higher than average FaceWorth and the left lower
-      uint turningPoint = getTurningPoint(hash, totalWorth, sortedParticipants);
+      uint turningPoint = getTurningPoint(_hash, totalWorth, sortedParticipants);
 
       // reverse those who give lower than average but the same FaceWorth so that the earlier participant is closer to the turning point
       if (turningPoint > 0) {
@@ -171,7 +175,7 @@ contract FaceWorthPollFactory is Owned {
         while (p > 0) {
           uint start = p;
           uint end = p;
-          while (end > 0 && poll.worthBy[sortedParticipants[start]] == poll.worthBy[sortedParticipants[end - 1]]) {
+          while (end > 0 && polls[_hash].worthBy[sortedParticipants[start]] == polls[_hash].worthBy[sortedParticipants[end - 1]]) {
             end = end - 1;
           }
           if (end > 0) p = end - 1;
@@ -185,33 +189,32 @@ contract FaceWorthPollFactory is Owned {
         }
       }
 
-      findWinners(hash, turningPoint, totalWorth, sortedParticipants);
+      findWinners(_hash, turningPoint, totalWorth, sortedParticipants);
 
-      distributePrize(hash);
+      distributePrize(_hash);
     }
 
-    rewardFaceTokens(hash);
+    rewardFaceTokens(_hash);
 
-    emit StageChange(hash, poll.currentStage, REVEALING);
+    emit StageChange(_hash, ENDED, REVEALING);
   }
 
-  function rewardFaceTokens(bytes32 hash) private {
-    FaceWorthPoll storage poll = polls[hash];
+  function rewardFaceTokens(bytes32 _hash) private {
     if (faceTokenRewardPool > 0) {
-      uint creatorReward = oneFace + oneFace * poll.participants.length / 10;
+      uint creatorReward = oneFace + oneFace * polls[_hash].participants.length * 382 / 10000;
       if (faceTokenRewardPool < creatorReward) {
         creatorReward = faceTokenRewardPool;
       }
-      rewardFaceTokens(poll.creator, creatorReward);
+      rewardFaceTokens(polls[_hash].creator, creatorReward);
       if (faceTokenRewardPool > 0) {
-        uint participantReward = oneFace / 10;
-        for (uint i = 0; i < poll.participants.length; i++) {
-          if (!poll.wonBy[poll.participants[i]]) {
+        uint participantReward = oneFace * 618 / 1000;
+        for (uint i = 0; i < polls[_hash].participants.length; i++) {
+          if (!polls[_hash].wonBy[polls[_hash].participants[i]]) {
             if (faceTokenRewardPool < participantReward) {
-              rewardFaceTokens(poll.participants[i], faceTokenRewardPool);
+              rewardFaceTokens(polls[_hash].participants[i], faceTokenRewardPool);
               break;
             } else {
-              rewardFaceTokens(poll.participants[i], participantReward);
+              rewardFaceTokens(polls[_hash].participants[i], participantReward);
             }
           }
         }
@@ -220,22 +223,21 @@ contract FaceWorthPollFactory is Owned {
   }
 
   function rewardFaceTokens(address _receiver, uint _value) private {
+    faceTokenRewardPool = faceTokenRewardPool.sub(_value);
     FaceToken faceToken = FaceToken(faceTokenAddress);
     faceToken.increaseApproval(_receiver, _value);
-    faceTokenRewardPool = faceTokenRewardPool.sub(_value);
   }
 
 
-  function findWinners(bytes32 hash, uint _turningPoint, uint _totalWorth, address[] memory _sortedParticipants) private {
-    FaceWorthPoll storage poll = polls[hash];
-    uint numOfWinners = poll.participants.length * winnersPerThousand / 1000;
-    if (numOfWinners > poll.revealCount) numOfWinners = poll.revealCount;
+  function findWinners(bytes32 _hash, uint _turningPoint, uint _totalWorth, address[] memory _sortedParticipants) private {
+    uint numOfWinners = polls[_hash].participants.length * winnersPerThousand / 1000;
+    if (numOfWinners > polls[_hash].revealCount) numOfWinners = polls[_hash].revealCount;
     uint index = 0;
     uint leftIndex = _turningPoint;
     uint rightIndex = _turningPoint;
-    if (poll.worthBy[_sortedParticipants[_turningPoint]] * poll.revealCount == _totalWorth) {
-      poll.winners.push(_sortedParticipants[_turningPoint]);
-      poll.wonBy[poll.winners[index]] = true;
+    if (polls[_hash].worthBy[_sortedParticipants[_turningPoint]] * polls[_hash].revealCount == _totalWorth) {
+      polls[_hash].winners.push(_sortedParticipants[_turningPoint]);
+      polls[_hash].wonBy[polls[_hash].winners[index]] = true;
       index++;
       rightIndex++;
     } else {
@@ -245,18 +247,18 @@ contract FaceWorthPollFactory is Owned {
     while (index < numOfWinners) {
       uint rightDiff;
       if (rightIndex < _sortedParticipants.length) {
-        rightDiff = poll.worthBy[_sortedParticipants[rightIndex]] * poll.revealCount - _totalWorth;
+        rightDiff = polls[_hash].worthBy[_sortedParticipants[rightIndex]] * polls[_hash].revealCount - _totalWorth;
       }
-      uint leftDiff = _totalWorth - poll.worthBy[_sortedParticipants[leftIndex]] * poll.revealCount;
+      uint leftDiff = _totalWorth - polls[_hash].worthBy[_sortedParticipants[leftIndex]] * polls[_hash].revealCount;
 
       if (rightIndex < _sortedParticipants.length && rightDiff <= leftDiff) {
-        poll.winners.push(_sortedParticipants[rightIndex]);
-        poll.wonBy[_sortedParticipants[rightIndex]] = true;
+        polls[_hash].winners.push(_sortedParticipants[rightIndex]);
+        polls[_hash].wonBy[_sortedParticipants[rightIndex]] = true;
         index++;
         rightIndex++;
       } else if (rightIndex >= _sortedParticipants.length || rightIndex < _sortedParticipants.length && rightDiff > leftDiff) {
-        poll.winners.push(_sortedParticipants[leftIndex]);
-        poll.wonBy[_sortedParticipants[leftIndex]] = true;
+        polls[_hash].winners.push(_sortedParticipants[leftIndex]);
+        polls[_hash].wonBy[_sortedParticipants[leftIndex]] = true;
         index++;
         if (leftIndex > 0) leftIndex--;
         else rightIndex++;
@@ -264,49 +266,46 @@ contract FaceWorthPollFactory is Owned {
     }
   }
 
-  function distributePrize(bytes32 hash) private {
-    FaceWorthPoll storage poll = polls[hash];
-    require(poll.winners.length > 0);
-    uint totalPrize = stake * poll.participants.length * distPercentage / 100;
-    uint avgPrize = totalPrize / poll.winners.length;
+  function distributePrize(bytes32 _hash) private {
+    require(polls[_hash].winners.length > 0);
+    uint totalPrize = stake * polls[_hash].participants.length * distPercentage / 100;
+    uint avgPrize = totalPrize / polls[_hash].winners.length;
     uint minPrize = (avgPrize + 2 * stake) / 3;
-    uint step = (avgPrize - minPrize) / (poll.winners.length / 2);
+    uint step = (avgPrize - minPrize) / (polls[_hash].winners.length / 2);
     uint prize = minPrize;
-    for (uint q = poll.winners.length; q > 0; q--) {
-      poll.winners[q - 1].transfer(prize);
+    for (uint q = polls[_hash].winners.length; q > 0; q--) {
+      polls[_hash].winners[q - 1].transfer(prize);
       prize += step;
     }
   }
 
-  function sortParticipants(bytes32 hash) private view returns (address[]) {
-    FaceWorthPoll storage poll = polls[hash];
-    address[] memory sortedParticipants_ = new address[](poll.revealCount);
+  function sortParticipants(bytes32 _hash) private view returns (address[]) {
+    address[] memory sortedParticipants_ = new address[](polls[_hash].revealCount);
     uint[101] memory count;
     for (uint i = 0; i < 101; i++) {
       count[i] = 0;
     }
-    for (uint j = 0; j < poll.participants.length; j++) {
-      if (poll.revealedBy[poll.participants[j]]) {
-        count[poll.worthBy[poll.participants[j]]]++;
+    for (uint j = 0; j < polls[_hash].participants.length; j++) {
+      if (polls[_hash].revealedBy[polls[_hash].participants[j]]) {
+        count[polls[_hash].worthBy[polls[_hash].participants[j]]]++;
       }
     }
     for (uint k = 1; k < 101; k++) {
       count[k] += count[k - 1];
     }
-    for (uint m = poll.participants.length; m > 0; m--) {
-      if (poll.revealedBy[poll.participants[m - 1]]) {
-        sortedParticipants_[count[poll.worthBy[poll.participants[m - 1]]] - 1] = poll.participants[m - 1];
-        count[poll.worthBy[poll.participants[m - 1]]]--;
+    for (uint m = polls[_hash].participants.length; m > 0; m--) {
+      if (polls[_hash].revealedBy[polls[_hash].participants[m - 1]]) {
+        sortedParticipants_[count[polls[_hash].worthBy[polls[_hash].participants[m - 1]]] - 1] = polls[_hash].participants[m - 1];
+        count[polls[_hash].worthBy[polls[_hash].participants[m - 1]]]--;
       }
     }
     return sortedParticipants_;
   }
 
-  function getTurningPoint(bytes32 hash, uint _totalWorth, address[] _sortedParticipants) private view returns (uint) {
-    FaceWorthPoll storage poll = polls[hash];
+  function getTurningPoint(bytes32 _hash, uint _totalWorth, address[] _sortedParticipants) private view returns (uint) {
     uint turningPoint_;
     for (uint i = 0; i < _sortedParticipants.length; i++) {
-      if (poll.worthBy[_sortedParticipants[i]] * poll.revealCount >= _totalWorth) {
+      if (polls[_hash].worthBy[_sortedParticipants[i]] * polls[_hash].revealCount >= _totalWorth) {
         turningPoint_ = i;
         break;
       }
@@ -314,60 +313,52 @@ contract FaceWorthPollFactory is Owned {
     return turningPoint_;
   }
 
-  function getTotalWorth(bytes32 hash) private view returns (uint) {
-    FaceWorthPoll storage poll = polls[hash];
+  function getTotalWorth(bytes32 _hash) private view returns (uint) {
     uint totalWorth_ = 0;
-    for (uint i = 0; i < poll.participants.length; i++) {
-      if (poll.revealedBy[poll.participants[i]]) {
-        totalWorth_ += poll.worthBy[poll.participants[i]];
+    for (uint i = 0; i < polls[_hash].participants.length; i++) {
+      if (polls[_hash].revealedBy[polls[_hash].participants[i]]) {
+        totalWorth_ += polls[_hash].worthBy[polls[_hash].participants[i]];
       }
     }
     return totalWorth_;
   }
 
-  function getCommitTimeElapsed(bytes32 hash) external view returns (uint) {
-    FaceWorthPoll storage poll = polls[hash];
-    if (block.number >= poll.commitEndingBlock) return 100;
-    return (block.number - poll.startingBlock) * 100 / (poll.commitEndingBlock - poll.startingBlock);
+  function getCommitTimeElapsed(bytes32 _hash) external view returns (uint) {
+    if (block.number >= polls[_hash].commitEndingBlock) return 100;
+    return (block.number - polls[_hash].startingBlock) * 100 / (polls[_hash].commitEndingBlock - polls[_hash].startingBlock);
   }
 
-  function getRevealTimeElapsed(bytes32 hash) external view returns (uint) {
-    FaceWorthPoll storage poll = polls[hash];
-    if (block.number < poll.commitEndingBlock) {
+  function getRevealTimeElapsed(bytes32 _hash) external view returns (uint) {
+    if (block.number < polls[_hash].commitEndingBlock) {
       return 0;
-    } else if (block.number >= poll.revealEndingBlock) {
+    } else if (block.number >= polls[_hash].revealEndingBlock) {
       return 100;
     } else {
-      return (block.number - poll.commitEndingBlock - 1) * 100 / (poll.revealEndingBlock - poll.commitEndingBlock - 1);
+      return (block.number - polls[_hash].commitEndingBlock - 1) * 100 / (polls[_hash].revealEndingBlock - polls[_hash].commitEndingBlock - 1);
     }
   }
 
-  function getCurrentStage(bytes32 hash) external view returns (uint8) {
-    FaceWorthPoll storage poll = polls[hash];
-    return poll.currentStage;
+  function getCurrentStage(bytes32 _hash) external view returns (uint8) {
+    return polls[_hash].currentStage;
   }
 
-  function getNumberOfParticipants(bytes32 hash) external view returns (uint) {
-    FaceWorthPoll storage poll = polls[hash];
-    return poll.participants.length;
+  function getNumberOfParticipants(bytes32 _hash) external view returns (uint) {
+    return polls[_hash].participants.length;
   }
 
-  function getParticipants(bytes32 hash) external view returns (address[]) {
-    FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage != COMMITTING);
-    return poll.participants;
+  function getParticipants(bytes32 _hash) external view returns (address[]) {
+    require(polls[_hash].currentStage != COMMITTING);
+    return polls[_hash].participants;
   }
 
-  function getWorthBy(bytes32 hash, address _who) external view returns (uint8) {
-    FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage == ENDED);
-    return poll.worthBy[_who];
+  function getWorthBy(bytes32 _hash, address _who) external view returns (uint8) {
+    require(polls[_hash].currentStage == ENDED);
+    return polls[_hash].worthBy[_who];
   }
 
-  function getWinners(bytes32 hash) external view returns (address[]) {
-    FaceWorthPoll storage poll = polls[hash];
-    require(poll.currentStage == ENDED);
-    return poll.winners;
+  function getWinners(bytes32 _hash) external view returns (address[]) {
+    require(polls[_hash].currentStage == ENDED);
+    return polls[_hash].winners;
   }
 
   function concat(string _str, uint8 _v) private pure returns (string) {
@@ -446,8 +437,13 @@ contract FaceWorthPollFactory is Owned {
     emit MinBlocksBeforeEndUpdate(minBlocksBeforeEnd, oldMinBlocksBeforeEnd);
   }
 
-  function() public payable {
-    revert();
+  function withdraw(uint _amount) external onlyOwner {
+    require(address(this).balance >= _amount);
+    msg.sender.transfer(_amount);
+  }
+
+  function getBalance() external view returns(uint) {
+    return address(this).balance;
   }
 
   event StakeUpdate(uint newStake, uint oldStake);
@@ -467,4 +463,6 @@ contract FaceWorthPollFactory is Owned {
   event StageChange(bytes32 hash, uint8 newStage, uint8 oldStage);
 
   event Refund(bytes32 hash, address recepient, uint fund);
+
+  event Reveal(bytes32 hash, address revealor, uint8 worth);
 }

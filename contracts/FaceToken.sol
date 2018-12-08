@@ -1,9 +1,8 @@
 pragma solidity ^0.4.23;
 
 import "./StandardToken.sol";
-import "./Owned.sol";
 
-contract FaceToken is StandardToken, Owned {
+contract FaceToken is StandardToken {
 
   // Token metadata
   string public constant name = "FaceWorths Token";
@@ -11,9 +10,9 @@ contract FaceToken is StandardToken, Owned {
   uint256 public constant decimals = 6;
   address public vault;
 
-  constructor(address _vault) public {
-    vault = _vault;
-    totalSupply_ = (10**9) * 10**decimals; // 100 million
+  constructor() public {
+    vault = msg.sender;
+    totalSupply_ = (10**9) * 10**decimals; // 1 billion
     balances[vault] = totalSupply_;
     emit Mint(vault, balances[vault]);
   }

@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/FaceWorths/faceworths-tron-smart-contracts#readme",
   "dependencies": {
+    "sleep": "^5.2.3",
     "tronweb": "^2.1.14"
   }
 }
