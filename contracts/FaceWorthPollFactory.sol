@@ -442,10 +442,6 @@ contract FaceWorthPollFactory is Owned {
     msg.sender.transfer(_amount);
   }
 
-  function getBalance() external view returns(uint) {
-    return address(this).balance;
-  }
-
   event StakeUpdate(uint newStake, uint oldStake);
 
   event MinParticipantsUpdate(uint newMinParticipants, uint oldMinParticipants);
