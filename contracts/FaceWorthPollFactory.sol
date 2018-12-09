@@ -145,6 +145,7 @@ contract FaceWorthPollFactory is Owned {
 
   function refund(bytes32 _hash) private {
     require(polls[_hash].currentStage == CANCELLED);
+
     for (uint i = 0; i < polls[_hash].participants.length; i++) {
       if (!polls[_hash].refunded[polls[_hash].participants[i]]) {
         polls[_hash].refunded[polls[_hash].participants[i]] = true;
@@ -156,6 +157,7 @@ contract FaceWorthPollFactory is Owned {
 
   function endPoll(bytes32 _hash) private {
     require(polls[_hash].currentStage != ENDED);
+
     polls[_hash].currentStage = ENDED;
 
     if (polls[_hash].revealCount > 0) {
@@ -265,6 +267,7 @@ contract FaceWorthPollFactory is Owned {
 
   function distributePrize(bytes32 _hash) private {
     require(polls[_hash].winners.length > 0);
+
     uint totalPrize = stake * polls[_hash].participants.length * distPercentage / 100;
     uint avgPrize = totalPrize / polls[_hash].winners.length;
     uint minPrize = (avgPrize + 2 * stake) / 3;
@@ -321,7 +324,12 @@ contract FaceWorthPollFactory is Owned {
   }
 
   function getStatus(bytes32 _hash) external view
-    returns (uint commitTimeLapsed_, uint revealTimeLapsed_, uint8 currentStage_, uint numberOfParticipants_)
+    returns (
+      uint commitTimeLapsed_,
+      uint revealTimeLapsed_,
+      uint8 currentStage_, uint
+      numberOfParticipants_
+    )
   {
     if (block.number >= polls[_hash].commitEndingBlock) commitTimeLapsed_ = 100;
     else {
@@ -421,6 +429,7 @@ contract FaceWorthPollFactory is Owned {
   function updateParticipantsRange(uint _minParticipants, uint _maxParticipants) external onlyOwner {
     require(_minParticipants <= _maxParticipants);
     require(_minParticipants != minParticipants || _maxParticipants != maxParticipants);
+
     if (_minParticipants != minParticipants) {
       uint oldMinParticipants = minParticipants;
       minParticipants = _minParticipants;
@@ -437,6 +446,7 @@ contract FaceWorthPollFactory is Owned {
     require(_distPercentage <= 100);
     require(1000 * _distPercentage / _winnersPerThousand >= 100);
     require(_winnersPerThousand != winnersPerThousand || _distPercentage != distPercentage);
+
     if (_winnersPerThousand != winnersPerThousand) {
       uint oldWinnersReturn = winnersPerThousand;
       winnersPerThousand = _winnersPerThousand;
