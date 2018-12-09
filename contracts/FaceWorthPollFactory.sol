@@ -67,7 +67,6 @@ contract FaceWorthPollFactory is Owned {
     uint _blocksBeforeEnd
   )
     public
-    returns (bytes32)
   {
     require(_blocksBeforeReveal >= minBlocksBeforeReveal);
     require(_blocksBeforeEnd >= minBlocksBeforeEnd);
@@ -88,8 +87,6 @@ contract FaceWorthPollFactory is Owned {
         polls[hash].commitEndingBlock,
         polls[hash].revealEndingBlock
     );
-
-    return hash;
   }
 
   function commit(bytes32 _hash, bytes32 _saltedWorthHash) payable external {
@@ -323,18 +320,47 @@ contract FaceWorthPollFactory is Owned {
     return totalWorth_;
   }
 
+  function getStatus(bytes32 _hash) external view
+    returns (uint commitTimeLapsed_, uint revealTimeLapsed_, uint8 currentStage_, uint numberOfParticipants_)
+  {
+    if (block.number >= polls[_hash].commitEndingBlock) commitTimeLapsed_ = 100;
+    else {
+      uint startingBlock = polls[_hash].startingBlock;
+      commitTimeLapsed_ = (block.number - startingBlock) * 100 / (polls[_hash].commitEndingBlock - startingBlock);
+    }
+
+    uint commitEndingBlock = polls[_hash].commitEndingBlock;
+    uint revealEndingBlock = polls[_hash].revealEndingBlock;
+    if (block.number < commitEndingBlock) {
+      revealTimeLapsed_ = 0;
+    } else if (block.number >= revealEndingBlock) {
+      revealTimeLapsed_ = 100;
+    } else {
+      revealTimeLapsed_ = (block.number - commitEndingBlock - 1) * 100 / (revealEndingBlock - commitEndingBlock - 1);
+    }
+
+    currentStage_ = polls[_hash].currentStage;
+
+    numberOfParticipants_ = polls[_hash].participants.length;
+  }
+
   function getCommitTimeElapsed(bytes32 _hash) external view returns (uint) {
     if (block.number >= polls[_hash].commitEndingBlock) return 100;
-    return (block.number - polls[_hash].startingBlock) * 100 / (polls[_hash].commitEndingBlock - polls[_hash].startingBlock);
+    else {
+      uint startingBlock = polls[_hash].startingBlock;
+      return (block.number - startingBlock) * 100 / (polls[_hash].commitEndingBlock - startingBlock);
+    }
   }
 
   function getRevealTimeElapsed(bytes32 _hash) external view returns (uint) {
-    if (block.number < polls[_hash].commitEndingBlock) {
+    uint commitEndingBlock = polls[_hash].commitEndingBlock;
+    uint revealEndingBlock = polls[_hash].revealEndingBlock;
+    if (block.number < commitEndingBlock) {
       return 0;
-    } else if (block.number >= polls[_hash].revealEndingBlock) {
+    } else if (block.number >= revealEndingBlock) {
       return 100;
     } else {
-      return (block.number - polls[_hash].commitEndingBlock - 1) * 100 / (polls[_hash].revealEndingBlock - polls[_hash].commitEndingBlock - 1);
+      return (block.number - commitEndingBlock - 1) * 100 / (revealEndingBlock - commitEndingBlock - 1);
     }
   }
 
