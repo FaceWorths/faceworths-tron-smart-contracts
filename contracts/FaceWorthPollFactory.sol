@@ -30,6 +30,7 @@ contract FaceWorthPollFactory is Owned {
     address[] participants;
     address[] winners;
     uint revealCount;
+    uint totalWorth;
   }
 
   uint public stake = 100000000; // every participant stake 100 trx
@@ -42,6 +43,14 @@ contract FaceWorthPollFactory is Owned {
   address public faceTokenAddress;
   uint256 public faceTokenRewardPool;
   uint256 public pollCount;
+
+  bytes32[20] public topFaceWorth;
+  uint8 public topFaceWorthCount = 0;
+  address[20] public topWinners;
+  uint8 public topWinnersCount = 0;
+
+
+  mapping(address=>uint) prizeBy;
 
   mapping(bytes32 => FaceWorthPoll) polls;
   uint oneFace;
@@ -56,6 +65,7 @@ contract FaceWorthPollFactory is Owned {
   event FaceWorthPollCreated (
     bytes32 indexed hash,
     address indexed creator,
+    bytes32 indexed faceHash,
     uint startingBlock,
     uint commitEndingBlock,
     uint revealEndingBlock
@@ -83,6 +93,7 @@ contract FaceWorthPollFactory is Owned {
     emit FaceWorthPollCreated(
         hash,
         msg.sender,
+        _faceHash,
         block.number,
         polls[hash].commitEndingBlock,
         polls[hash].revealEndingBlock
@@ -165,6 +176,7 @@ contract FaceWorthPollFactory is Owned {
       address[] memory sortedParticipants = sortParticipants(_hash);
 
       uint totalWorth = getTotalWorth(_hash);
+      polls[_hash].totalWorth = totalWorth;
       // find turning point where the right gives higher than average FaceWorth and the left lower
       uint turningPoint = getTurningPoint(_hash, totalWorth, sortedParticipants);
 
@@ -191,6 +203,8 @@ contract FaceWorthPollFactory is Owned {
       findWinners(_hash, turningPoint, totalWorth, sortedParticipants);
 
       distributePrize(_hash);
+
+      reorderTopWinners(_hash);
     }
 
     rewardFaceTokens(_hash);
@@ -274,8 +288,37 @@ contract FaceWorthPollFactory is Owned {
     uint step = (avgPrize - minPrize) / (polls[_hash].winners.length / 2);
     uint prize = minPrize;
     for (uint q = polls[_hash].winners.length; q > 0; q--) {
-      polls[_hash].winners[q - 1].transfer(prize);
+      address winner = polls[_hash].winners[q - 1];
+      prizeBy[winner] += prize;
+      winner.transfer(prize);
       prize += step;
+    }
+  }
+
+  function reorderTopWinners(bytes32 _hash) private {
+    uint8 end = polls[_hash].winners.length;
+    if (end > topWinners.length) {
+      end = topWinners.length;
+    }
+    for (uint i = 0; i < end; i++) {
+      bool inserted = false;
+      for(uint j = 0; j < topWinnersCount; j++){
+        if (prizeBy[polls[_hash].winners[i]] >= prizeBy[topWinners[j]]) {
+          if (topWinnersCount < topWinners.length) {
+            topFaceWorthCount++;
+          }
+          for (uint k = topWinnersCount; k > j; k--) {
+            topWinners[k] = topWinners[k-1];
+          }
+          topWinners[j] = polls[_hash].winners[i];
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted && topWinnersCount < topWinners.length) {
+        topWinners[topWinnersCount] = polls[_hash].winners[i];
+        topWinnersCount++;
+      }
     }
   }
 
@@ -327,8 +370,8 @@ contract FaceWorthPollFactory is Owned {
     returns (
       uint commitTimeLapsed_,
       uint revealTimeLapsed_,
-      uint8 currentStage_, uint
-      numberOfParticipants_
+      uint8 currentStage_,
+      uint numberOfParticipants_
     )
   {
     if (block.number >= polls[_hash].commitEndingBlock) commitTimeLapsed_ = 100;
