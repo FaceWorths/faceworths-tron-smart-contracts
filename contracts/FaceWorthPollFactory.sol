@@ -296,7 +296,7 @@ contract FaceWorthPollFactory is Owned {
   }
 
   function reorderTopWinners(bytes32 _hash) private {
-    uint8 end = polls[_hash].winners.length;
+    uint end = polls[_hash].winners.length;
     if (end > topWinners.length) {
       end = topWinners.length;
     }
