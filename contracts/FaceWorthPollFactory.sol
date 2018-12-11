@@ -305,7 +305,7 @@ contract FaceWorthPollFactory is Owned {
       for(uint j = 0; j < topWinnersCount; j++){
         if (prizeBy[polls[_hash].winners[i]] >= prizeBy[topWinners[j]]) {
           if (topWinnersCount < topWinners.length) {
-            topFaceWorthCount++;
+            topWinnersCount++;
           }
           for (uint k = topWinnersCount; k > j; k--) {
             topWinners[k] = topWinners[k-1];
