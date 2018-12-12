@@ -142,7 +142,7 @@ contract FaceWorthPollFactory is Owned {
           emit StageChange(_hash, polls[_hash].currentStage, COMMITTING);
           refund(_hash);
         } else if (block.number <= polls[_hash].revealEndingBlock) {
-          if (poss[_hash].currentStage != REVEALING) {
+          if (polls[_hash].currentStage != REVEALING) {
             polls[_hash].currentStage = REVEALING;
             emit StageChange(_hash, REVEALING, COMMITTING);
           }
