@@ -1,4 +1,4 @@
-pragma solidity ^0.4.23;
+pragma solidity >=0.4.23 <0.5.0;
 
 contract TRC20 {
   function totalSupply() public constant returns (uint);
