@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "truffle test"
+    "test": "tronbox test"
   },
   "repository": {
     "type": "git",

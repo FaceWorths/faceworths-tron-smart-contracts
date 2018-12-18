@@ -17,9 +17,9 @@ contract FaceWorthPollFactory is Owned {
   struct FaceWorthPoll {
     address creator;
     bytes32 faceHash;  // face photo's SHA-256 hash
-    uint startingBlock;
-    uint commitEndingBlock;
-    uint revealEndingBlock;
+    uint startBlock;
+    uint commitEndBlock;
+    uint revealEndBlock;
     uint8 currentStage;
 
     mapping(address => bytes32) saltedWorthHashBy;
@@ -51,7 +51,7 @@ contract FaceWorthPollFactory is Owned {
   uint8 public topWinnersCount = 0;
   mapping(address=>uint) public prizeBy;
   mapping(bytes32 => FaceWorthPoll) public polls;
-  uint256 public pollCount;
+  bytes32[] pollHashes;
 
   constructor(address _faceTokenAddress) public {
     faceTokenAddress = _faceTokenAddress;
@@ -64,9 +64,9 @@ contract FaceWorthPollFactory is Owned {
     bytes32 indexed hash,
     address indexed creator,
     bytes32 indexed faceHash,
-    uint startingBlock,
-    uint commitEndingBlock,
-    uint revealEndingBlock
+    uint startBlock,
+    uint commitEndBlock,
+    uint revealEndBlock
   );
 
   function createFaceWorthPoll(
@@ -74,7 +74,7 @@ contract FaceWorthPollFactory is Owned {
     uint _blocksBeforeReveal,
     uint _blocksBeforeEnd
   )
-    public
+    public returns (bytes32)
   {
     require(_blocksBeforeReveal >= minBlocksBeforeReveal);
     require(_blocksBeforeEnd >= minBlocksBeforeEnd);
@@ -82,20 +82,26 @@ contract FaceWorthPollFactory is Owned {
     bytes32 hash = keccak256(abi.encodePacked(msg.sender, _faceHash, block.number));
     polls[hash].creator = msg.sender;
     polls[hash].faceHash = _faceHash;
-    polls[hash].startingBlock = block.number;
-    polls[hash].commitEndingBlock = block.number + _blocksBeforeReveal;
-    polls[hash].revealEndingBlock = polls[hash].commitEndingBlock + _blocksBeforeEnd;
+    polls[hash].startBlock = block.number;
+    polls[hash].commitEndBlock = block.number + _blocksBeforeReveal;
+    polls[hash].revealEndBlock = polls[hash].commitEndBlock + _blocksBeforeEnd;
     polls[hash].currentStage = COMMITTING;
-    pollCount++;
+    pollHashes.push(hash);
 
     emit FaceWorthPollCreated(
       hash,
       msg.sender,
       _faceHash,
       block.number,
-      polls[hash].commitEndingBlock,
-      polls[hash].revealEndingBlock
+      polls[hash].commitEndBlock,
+      polls[hash].revealEndBlock
     );
+
+    return hash;
+  }
+
+  function getPollCount() external view returns(uint) {
+    return pollHashes.length;
   }
 
   function commit(bytes32 _hash, bytes32 _saltedWorthHash) payable external {
@@ -140,12 +146,12 @@ contract FaceWorthPollFactory is Owned {
   function checkBlockNumber(bytes32 _hash) external {
     uint8 stage = polls[_hash].currentStage;
     if (stage != CANCELLED && stage != ENDED && stage != TIMEOUT) {
-      if (block.number > polls[_hash].commitEndingBlock) {
+      if (block.number > polls[_hash].commitEndBlock) {
         if (polls[_hash].participants.length < minParticipants) {
           polls[_hash].currentStage = TIMEOUT;
           emit StageChange(_hash, TIMEOUT, COMMITTING, block.number);
           refund(_hash);
-        } else if (block.number <= polls[_hash].revealEndingBlock) {
+        } else if (block.number <= polls[_hash].revealEndBlock) {
           if (polls[_hash].currentStage != REVEALING) {
             polls[_hash].currentStage = REVEALING;
             emit StageChange(_hash, REVEALING, COMMITTING, block.number);
@@ -414,20 +420,20 @@ contract FaceWorthPollFactory is Owned {
     uint totalWorth_
   )
   {
-    if (block.number >= polls[_hash].commitEndingBlock) commitTimeLapsed_ = 100;
+    if (block.number >= polls[_hash].commitEndBlock) commitTimeLapsed_ = 100;
     else {
-      uint startingBlock = polls[_hash].startingBlock;
-      commitTimeLapsed_ = (block.number - startingBlock) * 100 / (polls[_hash].commitEndingBlock - startingBlock);
+      uint startBlock = polls[_hash].startBlock;
+      commitTimeLapsed_ = (block.number - startBlock) * 100 / (polls[_hash].commitEndBlock - startBlock);
     }
 
-    uint commitEndingBlock = polls[_hash].commitEndingBlock;
-    uint revealEndingBlock = polls[_hash].revealEndingBlock;
-    if (block.number < commitEndingBlock) {
+    uint commitEndBlock = polls[_hash].commitEndBlock;
+    uint revealEndBlock = polls[_hash].revealEndBlock;
+    if (block.number < commitEndBlock) {
       revealTimeLapsed_ = 0;
-    } else if (block.number >= revealEndingBlock) {
+    } else if (block.number >= revealEndBlock) {
       revealTimeLapsed_ = 100;
     } else {
-      revealTimeLapsed_ = (block.number - commitEndingBlock - 1) * 100 / (revealEndingBlock - commitEndingBlock - 1);
+      revealTimeLapsed_ = (block.number - commitEndBlock - 1) * 100 / (revealEndBlock - commitEndBlock - 1);
     }
 
     currentStage_ = polls[_hash].currentStage;
@@ -440,23 +446,27 @@ contract FaceWorthPollFactory is Owned {
   }
 
   function getCommitTimeElapsed(bytes32 _hash) external view returns (uint) {
-    if (block.number >= polls[_hash].commitEndingBlock) return 100;
+    if (block.number >= polls[_hash].commitEndBlock) return 100;
     else {
-      uint startingBlock = polls[_hash].startingBlock;
-      return (block.number - startingBlock) * 100 / (polls[_hash].commitEndingBlock - startingBlock);
+      uint startBlock = polls[_hash].startBlock;
+      return (block.number - startBlock) * 100 / (polls[_hash].commitEndBlock - startBlock);
     }
   }
 
   function getRevealTimeElapsed(bytes32 _hash) external view returns (uint) {
-    uint commitEndingBlock = polls[_hash].commitEndingBlock;
-    uint revealEndingBlock = polls[_hash].revealEndingBlock;
-    if (block.number < commitEndingBlock) {
+    uint commitEndBlock = polls[_hash].commitEndBlock;
+    uint revealEndBlock = polls[_hash].revealEndBlock;
+    if (block.number < commitEndBlock) {
       return 0;
-    } else if (block.number >= revealEndingBlock) {
+    } else if (block.number >= revealEndBlock) {
       return 100;
     } else {
-      return (block.number - commitEndingBlock - 1) * 100 / (revealEndingBlock - commitEndingBlock - 1);
+      return (block.number - commitEndBlock - 1) * 100 / (revealEndBlock - commitEndBlock - 1);
     }
+  }
+
+  function getCurrentBlock() external view returns (uint) {
+    return block.number;
   }
 
   function getCurrentStage(bytes32 _hash) external view returns (uint8) {
