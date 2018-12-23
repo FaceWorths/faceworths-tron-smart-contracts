@@ -414,26 +414,34 @@ contract FaceWorthPollFactory is Owned {
   returns (
     uint commitTimeLapsed_,
     uint revealTimeLapsed_,
+    uint commitBlocksLeft_,
+    uint revealBlocksLeft_,
     uint8 currentStage_,
     uint participantCount_,
     uint revealCount_,
     uint totalWorth_
   )
   {
-    if (block.number >= polls[_hash].commitEndBlock) commitTimeLapsed_ = 100;
-    else {
+    if (block.number >= polls[_hash].commitEndBlock) {
+     commitTimeLapsed_ = 100;
+     commitBlocksLeft_ = 0;
+    } else {
       uint startBlock = polls[_hash].startBlock;
       commitTimeLapsed_ = (block.number - startBlock) * 100 / (polls[_hash].commitEndBlock - startBlock);
+      commitBlocksLeft_ = polls[_hash].commitEndBlock - block.number;
     }
 
     uint commitEndBlock = polls[_hash].commitEndBlock;
     uint revealEndBlock = polls[_hash].revealEndBlock;
-    if (block.number < commitEndBlock) {
+    if (block.number <= commitEndBlock) {
       revealTimeLapsed_ = 0;
+      revealBlocksLeft_ = revealEndBlock - block.number;
     } else if (block.number >= revealEndBlock) {
       revealTimeLapsed_ = 100;
+      revealBlocksLeft_ = 0;
     } else {
-      revealTimeLapsed_ = (block.number - commitEndBlock - 1) * 100 / (revealEndBlock - commitEndBlock - 1);
+      revealTimeLapsed_ = (block.number - commitEndBlock) * 100 / (revealEndBlock - commitEndBlock);
+      revealBlocksLeft_ = revealEndBlock - block.number;
     }
 
     currentStage_ = polls[_hash].currentStage;
@@ -456,7 +464,7 @@ contract FaceWorthPollFactory is Owned {
   function getRevealTimeElapsed(bytes32 _hash) external view returns (uint) {
     uint commitEndBlock = polls[_hash].commitEndBlock;
     uint revealEndBlock = polls[_hash].revealEndBlock;
-    if (block.number < commitEndBlock) {
+    if (block.number <= commitEndBlock + 1) {
       return 0;
     } else if (block.number >= revealEndBlock) {
       return 100;
