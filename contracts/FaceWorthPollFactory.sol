@@ -469,7 +469,7 @@ contract FaceWorthPollFactory is Owned {
     } else if (block.number >= revealEndBlock) {
       return 100;
     } else {
-      return (block.number - commitEndBlock - 1) * 100 / (revealEndBlock - commitEndBlock - 1);
+      return (block.number - commitEndBlock) * 100 / (revealEndBlock - commitEndBlock);
     }
   }
 
