@@ -45,9 +45,9 @@ contract FaceWorthPollFactory is Owned {
   address public faceTokenAddress;
   uint256 public faceTokenRewardPool;
 
-  bytes32[20] public topFaces;
+  bytes32[10] public topFaces;
   uint8 public topFaceCount = 0;
-  address[20] public topWinners;
+  address[10] public topWinners;
   uint8 public topWinnersCount = 0;
   mapping(address=>uint) public prizeBy;
   mapping(bytes32 => FaceWorthPoll) public polls;
