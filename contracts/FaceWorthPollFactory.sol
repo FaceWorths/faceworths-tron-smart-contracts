@@ -412,6 +412,7 @@ contract FaceWorthPollFactory is Owned {
 
   function getStatus(bytes32 _hash) external view
   returns (
+    address creator_,
     uint commitTimeLapsed_,
     uint revealTimeLapsed_,
     uint commitBlocksLeft_,
@@ -422,6 +423,7 @@ contract FaceWorthPollFactory is Owned {
     uint totalWorth_
   )
   {
+    creator_ = polls[_hash].creator;
     if (block.number >= polls[_hash].commitEndBlock) {
      commitTimeLapsed_ = 100;
      commitBlocksLeft_ = 0;
