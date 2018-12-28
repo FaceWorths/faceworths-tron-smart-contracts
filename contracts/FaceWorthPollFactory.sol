@@ -45,8 +45,8 @@ contract FaceWorthPollFactory is Owned {
   address public faceTokenAddress;
   uint256 public faceTokenRewardPool;
 
-  bytes32[20] public topFaceWorth;
-  uint8 public topFaceWorthCount = 0;
+  bytes32[20] public topFaces;
+  uint8 public topFaceCount = 0;
   address[20] public topWinners;
   uint8 public topWinnersCount = 0;
   mapping(address=>uint) public prizeBy;
@@ -212,7 +212,7 @@ contract FaceWorthPollFactory is Owned {
 
       reorderTopWinners(_hash);
 
-      reorderTopFaceWorth(_hash);
+      reorderTopFaces(_hash);
     }
 
     rewardFaceTokens(_hash);
@@ -334,24 +334,24 @@ contract FaceWorthPollFactory is Owned {
     }
   }
 
-  function reorderTopFaceWorth(bytes32 _hash) private {
+  function reorderTopFaces(bytes32 _hash) private {
     bool inserted = false;
-    for (uint i = 0; i < topFaceWorthCount; i++) {
-      if (compareScore(_hash, topFaceWorth[i]) >= 0) {
-        if (topFaceWorthCount < topFaceWorth.length) {
-          topFaceWorthCount++;
+    for (uint i = 0; i < topFaceCount; i++) {
+      if (compareScore(_hash, topFaces[i]) >= 0) {
+        if (topFaceCount < topFaces.length) {
+          topFaceCount++;
         }
-        for (uint j = topFaceWorthCount - 1; j > i; j--) {
-          topFaceWorth[j] = topFaceWorth[j - 1];
+        for (uint j = topFaceCount - 1; j > i; j--) {
+          topFaces[j] = topFaces[j - 1];
         }
-        topFaceWorth[i] = _hash;
+        topFaces[i] = _hash;
         inserted = true;
         break;
       }
     }
-    if (!inserted && topFaceWorthCount < topFaceWorth.length) {
-      topFaceWorth[topFaceWorthCount] = _hash;
-      topFaceWorthCount++;
+    if (!inserted && topFaceCount < topFaces.length) {
+      topFaces[topFaceCount] = _hash;
+      topFaceCount++;
     }
   }
 
@@ -366,13 +366,25 @@ contract FaceWorthPollFactory is Owned {
     }
   }
 
-  function compareScore(bytes32 _hash1, bytes32 _hash2) private view returns (uint) {
+  function compareScore(bytes32 _hash1, bytes32 _hash2) private view returns (int) {
     uint score1 = polls[_hash1].totalWorth * polls[_hash2].revealCount * sqrt(polls[_hash1].participants.length * 10);
     uint score2 = polls[_hash2].totalWorth * polls[_hash1].revealCount * sqrt(polls[_hash2].participants.length * 10);
     if (score1 == score2) {
-      return polls[_hash1].participants.length - polls[_hash2].participants.length;
+      if (polls[_hash1].participants.length > polls[_hash2].participants.length) {
+        return 1;
+      } else if (polls[_hash1].participants.length == polls[_hash2].participants.length) {
+        return 0;
+      } else {
+        return -1;
+      }
     } else {
-      return score1 - score2;
+      if (score1 > score2) {
+        return 1;
+      } else if (score1 == score2) {
+        return 0;
+      } else {
+        return -1;
+      }
     }
   }
 
