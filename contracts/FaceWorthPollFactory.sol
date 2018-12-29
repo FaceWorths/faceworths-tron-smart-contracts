@@ -37,7 +37,7 @@ contract FaceWorthPollFactory is Owned {
   uint public oneFace;
   uint public stake = 100000000; // every participant stake 100 trx
   uint public minParticipants = 3;
-  uint public maxParticipants = 1000;
+  uint public maxParticipants = 618;
   uint public winnersPerThousand = 382;   // 1000 * distPercentage / winnersPerThousand must be greater than 100,
   uint public distPercentage = 90; // so that winners prize is greater than the stake
   uint public minBlocksBeforeReveal = 10; // 10 blocks is about 30 seconds
@@ -299,10 +299,19 @@ contract FaceWorthPollFactory is Owned {
       prizeBy[polls[_hash].winners[0]] += totalPrize;
       polls[_hash].winners[0].transfer(totalPrize);
     } else {
-      uint avgPrize = totalPrize / winnerCount;
-      uint minPrize = (avgPrize + 2 * stake) / 3;
-      uint step = (avgPrize - minPrize) / (winnerCount / 2);
-      uint prize = minPrize;
+      uint minLowestPrize = stake + (stake / 10);
+      uint maxStep = (totalPrize * 2 - 2 * minLowestPrize * winnerCount)  / (winnerCount ** 2 - winnerCount);
+      uint step;
+      if (maxStep <= 2) {
+        step = maxStep;
+      } else  {
+        step = (1 + maxStep) / 2;
+        if (step > stake) {
+          step = stake;
+        }
+      }
+      uint lowestPrize = (totalPrize * 2 + step * winnerCount - winnerCount ** 2 * step) / (2 * winnerCount);
+      uint prize = lowestPrize;
       for (uint i = winnerCount; i > 0; i--) {
         prizeBy[polls[_hash].winners[i - 1]] += prize;
         polls[_hash].winners[i - 1].transfer(prize);
