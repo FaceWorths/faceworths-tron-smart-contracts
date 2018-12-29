@@ -39,7 +39,7 @@ contract FaceWorthPollFactory is Owned {
   uint public minParticipants = 3;
   uint public maxParticipants = 618;
   uint public winnersPerThousand = 382;   // 1000 * distPercentage / winnersPerThousand must be greater than 100,
-  uint public distPercentage = 90; // so that winners prize is greater than the stake
+  uint public distPercentage = 80; // so that winners prize is greater than the stake
   uint public minBlocksBeforeReveal = 10; // 10 blocks is about 30 seconds
   uint public minBlocksBeforeEnd = 10;
   address public faceTokenAddress;
