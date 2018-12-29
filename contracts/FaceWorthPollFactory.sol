@@ -266,6 +266,7 @@ contract FaceWorthPollFactory is Owned {
       emit Win(_hash, _sortedParticipants[_turningPoint], polls[_hash].worthBy[_sortedParticipants[_turningPoint]]);
       count++;
       rightIndex++;
+      if (leftIndex > 0) leftIndex--;
     } else {
       if (leftIndex > 0) leftIndex--;
       else rightIndex++;
@@ -480,8 +481,8 @@ contract FaceWorthPollFactory is Owned {
   {
     creator_ = polls[_hash].creator;
     if (block.number >= polls[_hash].commitEndBlock) {
-     commitTimeLapsed_ = 100;
-     commitBlocksLeft_ = 0;
+      commitTimeLapsed_ = 100;
+      commitBlocksLeft_ = 0;
     } else {
       uint startBlock = polls[_hash].startBlock;
       commitTimeLapsed_ = (block.number - startBlock) * 100 / (polls[_hash].commitEndBlock - startBlock);
