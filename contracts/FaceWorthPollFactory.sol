@@ -131,6 +131,10 @@ contract FaceWorthPollFactory is Owned {
     polls[_hash].revealCount++;
     polls[_hash].totalWorth += _worth;
     emit Reveal(_hash, msg.sender, _worth);
+    if (polls[_hash].revealCount == polls[_hash].participants.length) {
+      emit EarlyReveal(_hash, block.number, polls[_hash].revealEndBlock);
+      polls[_hash].revealEndBlock = block.number;
+    }
   }
 
   function cancel(bytes32 _hash) external {
@@ -514,7 +518,7 @@ contract FaceWorthPollFactory is Owned {
     return polls[_hash].winners.length;
   }
 
-  function getWinners(bytes32 _hash) external view returns (address[]) {
+  function getWinners(bytes32 _hash) external view returns (address[] memory) {
     require(polls[_hash].currentStage == ENDED);
     return polls[_hash].winners;
   }
@@ -630,4 +634,6 @@ contract FaceWorthPollFactory is Owned {
   event Reveal(bytes32 hash, address revealor, uint8 worth);
 
   event Win(bytes32 hash, address winner, uint8 worth);
+
+  event EarlyReveal(bytes32 hash, uint newRevealEndBlock, uint oldRevealEndBlock);
 }
