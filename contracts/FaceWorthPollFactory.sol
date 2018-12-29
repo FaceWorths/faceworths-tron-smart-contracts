@@ -49,6 +49,7 @@ contract FaceWorthPollFactory is Owned {
   uint8 public topFaceCount = 0;
   address[10] public topWinners;
   uint8 public topWinnersCount = 0;
+  mapping(address=>uint) public topWinnersRank;
   mapping(address=>uint) public prizeBy;
   mapping(bytes32 => FaceWorthPoll) public polls;
   bytes32[] pollHashes;
@@ -310,7 +311,7 @@ contract FaceWorthPollFactory is Owned {
           step = stake;
         }
       }
-      uint lowestPrize = (totalPrize * 2 + step * winnerCount - winnerCount ** 2 * step) / (2 * winnerCount);
+      uint lowestPrize = (totalPrize * 2 + step * winnerCount - step * (winnerCount ** 2)) / (2 * winnerCount);
       uint prize = lowestPrize;
       for (uint i = winnerCount; i > 0; i--) {
         prizeBy[polls[_hash].winners[i - 1]] += prize;
@@ -321,28 +322,57 @@ contract FaceWorthPollFactory is Owned {
   }
 
   function reorderTopWinners(bytes32 _hash) private {
-    uint end = polls[_hash].winners.length;
-    if (end > topWinners.length) {
-      end = topWinners.length;
-    }
-    for (uint i = 0; i < end; i++) {
-      bool inserted = false;
-      for (uint j = 0; j < topWinnersCount; j++) {
-        if (prizeBy[polls[_hash].winners[i]] >= prizeBy[topWinners[j]]) {
-          if (topWinnersCount < topWinners.length) {
-            topWinnersCount++;
+    for (uint i = 0; i < polls[_hash].winners.length; i++) {
+      uint currentRank = topWinnersRank[polls[_hash].winners[i]];
+      if (currentRank > 0) { // already top winners
+        if (currentRank > 1 && prizeBy[topWinners[currentRank - 1]] > prizeBy[topWinners[currentRank - 2]]) {
+          for (uint p = currentRank - 1; p > 0; p--) {
+            if (prizeBy[topWinners[p]] > prizeBy[topWinners[p - 1]]) {
+              topWinners[p] = topWinners[p - 1];
+              topWinnersRank[topWinners[p]] = p + 1;
+              topWinners[p-1] = polls[_hash].winners[i];
+              topWinnersRank[topWinners[p - 1]] = p;
+            } else {
+              break;
+            }
           }
-          for (uint k = topWinnersCount - 1; k > j; k--) {
-            topWinners[k] = topWinners[k - 1];
+        } else {
+          for (uint q = currentRank - 1; q < topWinnersCount - 1; q++) {
+            if (prizeBy[topWinners[q]] < prizeBy[topWinners[q + 1]]) {
+              topWinners[q] = topWinners[q + 1];
+              topWinnersRank[topWinners[q]] = q + 1;
+              topWinners[q + 1] = polls[_hash].winners[i];
+              topWinnersRank[topWinners[q + 1]] = q + 2;
+            } else {
+              break;
+            }
           }
-          topWinners[j] = polls[_hash].winners[i];
-          inserted = true;
-          break;
         }
-      }
-      if (!inserted && topWinnersCount < topWinners.length) {
-        topWinners[topWinnersCount] = polls[_hash].winners[i];
-        topWinnersCount++;
+      } else {
+        bool inserted = false;
+        for (uint j = 0; j < topWinnersCount; j++) {
+          if (prizeBy[polls[_hash].winners[i]] >= prizeBy[topWinners[j]]) {
+            if (topWinnersCount == topWinners.length) {
+              topWinnersRank[topWinners[topWinnersCount - 1]] = 0;
+            }
+            if (topWinnersCount < topWinners.length) {
+              topWinnersCount++;
+            }
+            for (uint k = topWinnersCount - 1; k > j; k--) {
+              topWinners[k] = topWinners[k - 1];
+              topWinnersRank[topWinners[k]] = k + 1;
+            }
+            topWinners[j] = polls[_hash].winners[i];
+            topWinnersRank[topWinners[j]] = j + 1;
+            inserted = true;
+            break;
+          }
+        }
+        if (!inserted && topWinnersCount < topWinners.length) {
+          topWinners[topWinnersCount] = polls[_hash].winners[i];
+          topWinnersRank[topWinners[topWinnersCount]] = topWinnersCount + 1;
+          topWinnersCount++;
+        }
       }
     }
   }
