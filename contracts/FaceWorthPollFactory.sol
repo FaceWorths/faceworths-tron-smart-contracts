@@ -39,7 +39,7 @@ contract FaceWorthPollFactory is Owned {
   uint public minParticipants = 3;
   uint public maxParticipants = 618; // this number affects distributePrize algorithm's effectiveness
   uint public winnersPerThousand = 382; // 1000 * distPercentage / winnersPerThousand must be greater than 100,
-  uint public distPercentage = 80; // so that winners prize is greater than the stake
+  uint public distPercentage = 85; // so that winners prize is greater than the stake
   uint public minWaitBlocks = 10; // 10 blocks is about 30 seconds
   address public faceTokenAddress;
   uint256 public faceTokenRewardPool;
@@ -297,7 +297,7 @@ contract FaceWorthPollFactory is Owned {
       prizeBy[polls[_hash].winners[0]] += totalPrize;
       polls[_hash].winners[0].transfer(totalPrize);
     } else {
-      uint minLowestPrize = stake + (stake / 10);
+      uint minLowestPrize = stake;
       uint maxStep = (totalPrize * 2 - 2 * minLowestPrize * winnerCount)  / (winnerCount ** 2 - winnerCount);
       uint step;
       if (maxStep <= 2) {
