@@ -28,6 +28,7 @@ contract FaceWorthPollFactory is Owned {
     mapping(address => bool) revealedBy;
     mapping(address => bool) refunded;
     mapping(address => bool) wonBy;
+    mapping(address => uint) prizeBy;
     address[] participants;
     address[] winners;
     uint revealCount;
@@ -49,7 +50,7 @@ contract FaceWorthPollFactory is Owned {
   address[10] public topWinners;
   uint8 public topWinnersCount = 0;
   mapping(address=>uint) public topWinnersRank;
-  mapping(address=>uint) public prizeBy;
+  mapping(address=>uint) public totalPrizeBy;
   mapping(bytes32 => FaceWorthPoll) public polls;
   bytes32[] pollHashes;
 
@@ -294,7 +295,7 @@ contract FaceWorthPollFactory is Owned {
     uint totalPrize = stake * polls[_hash].participants.length * distPercentage / 100;
     uint winnerCount = polls[_hash].winners.length;
     if (winnerCount == 1) {
-      prizeBy[polls[_hash].winners[0]] += totalPrize;
+      totalPrizeBy[polls[_hash].winners[0]] += totalPrize;
       polls[_hash].winners[0].transfer(totalPrize);
     } else {
       uint minLowestPrize = stake;
@@ -311,8 +312,9 @@ contract FaceWorthPollFactory is Owned {
       uint lowestPrize = (totalPrize * 2 + step * winnerCount - step * (winnerCount ** 2)) / (2 * winnerCount);
       uint prize = lowestPrize;
       for (uint i = winnerCount; i > 0; i--) {
-        prizeBy[polls[_hash].winners[i - 1]] += prize;
         polls[_hash].winners[i - 1].transfer(prize);
+        polls[_hash].prizeBy[polls[_hash].winners[i - 1]] = prize;
+        totalPrizeBy[polls[_hash].winners[i - 1]] += prize;
         prize += step;
       }
     }
@@ -322,9 +324,9 @@ contract FaceWorthPollFactory is Owned {
     for (uint i = 0; i < polls[_hash].winners.length; i++) {
       uint currentRank = topWinnersRank[polls[_hash].winners[i]];
       if (currentRank > 0) { // already top winners
-        if (currentRank > 1 && prizeBy[topWinners[currentRank - 1]] > prizeBy[topWinners[currentRank - 2]]) {
+        if (currentRank > 1 && totalPrizeBy[topWinners[currentRank - 1]] > totalPrizeBy[topWinners[currentRank - 2]]) {
           for (uint p = currentRank - 1; p > 0; p--) {
-            if (prizeBy[topWinners[p]] > prizeBy[topWinners[p - 1]]) {
+            if (totalPrizeBy[topWinners[p]] > totalPrizeBy[topWinners[p - 1]]) {
               topWinners[p] = topWinners[p - 1];
               topWinnersRank[topWinners[p]] = p + 1;
               topWinners[p-1] = polls[_hash].winners[i];
@@ -335,7 +337,7 @@ contract FaceWorthPollFactory is Owned {
           }
         } else {
           for (uint q = currentRank - 1; q < topWinnersCount - 1; q++) {
-            if (prizeBy[topWinners[q]] < prizeBy[topWinners[q + 1]]) {
+            if (totalPrizeBy[topWinners[q]] < totalPrizeBy[topWinners[q + 1]]) {
               topWinners[q] = topWinners[q + 1];
               topWinnersRank[topWinners[q]] = q + 1;
               topWinners[q + 1] = polls[_hash].winners[i];
@@ -348,7 +350,7 @@ contract FaceWorthPollFactory is Owned {
       } else {
         bool inserted = false;
         for (uint j = 0; j < topWinnersCount; j++) {
-          if (prizeBy[polls[_hash].winners[i]] >= prizeBy[topWinners[j]]) {
+          if (totalPrizeBy[polls[_hash].winners[i]] >= totalPrizeBy[topWinners[j]]) {
             if (topWinnersCount == topWinners.length) {
               topWinnersRank[topWinners[topWinnersCount - 1]] = 0;
             }
@@ -518,8 +520,12 @@ contract FaceWorthPollFactory is Owned {
     return polls[_hash].winners;
   }
 
-  function getPrize(address winner) external view returns (uint) {
-    return prizeBy[winner];
+  function getPrize(bytes32 _hash, address winner) external view returns (uint) {
+    return polls[_hash].prizeBy[winner];
+  }
+
+  function getTotalPrize(address winner) external view returns (uint) {
+    return totalPrizeBy[winner];
   }
 
   function concat(string _str, uint8 _v) private pure returns (string) {
