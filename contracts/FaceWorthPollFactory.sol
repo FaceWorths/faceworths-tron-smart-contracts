@@ -26,16 +26,17 @@ contract FaceWorthPollFactory is Owned {
     mapping(address => uint8) worthBy;
     mapping(address => bool) committedBy;
     mapping(address => bool) revealedBy;
-    mapping(address => bool) refunded;
+    mapping(address => bool) refundTo;
     mapping(address => bool) wonBy;
-    mapping(address => uint) prizeBy;
+    mapping(address => uint) prizeTo;
+    mapping(address => uint) rewardsTo;
     address[] participants;
     address[] winners;
     uint revealCount;
     uint totalWorth;
   }
 
-  uint public oneFace;
+  uint public tenFaces;
   uint public stake = 100000000; // every participant stake 100 trx
   uint public minParticipants = 3;
   uint public maxParticipants = 618; // this number affects distributePrize algorithm's effectiveness
@@ -58,7 +59,7 @@ contract FaceWorthPollFactory is Owned {
     faceTokenAddress = _faceTokenAddress;
     FaceToken faceToken = FaceToken(faceTokenAddress);
     faceTokenRewardPool = faceToken.totalSupply() * 618 / 1000;
-    oneFace = 10 ** faceToken.decimals();
+    tenFaces = 10 ** faceToken.decimals() * 10;
   }
 
   event FaceWorthPollCreated (
@@ -167,8 +168,8 @@ contract FaceWorthPollFactory is Owned {
 
   function refund(bytes32 _hash) private {
     for (uint i = 0; i < polls[_hash].participants.length; i++) {
-      if (!polls[_hash].refunded[polls[_hash].participants[i]]) {
-        polls[_hash].refunded[polls[_hash].participants[i]] = true;
+      if (!polls[_hash].refundTo[polls[_hash].participants[i]]) {
+        polls[_hash].refundTo[polls[_hash].participants[i]] = true;
         polls[_hash].participants[i].transfer(stake);
         emit Refund(_hash, polls[_hash].participants[i], stake);
       }
@@ -224,20 +225,23 @@ contract FaceWorthPollFactory is Owned {
 
   function rewardFaceTokens(bytes32 _hash) private {
     if (faceTokenRewardPool > 0) {
-      uint creatorReward = oneFace + oneFace * polls[_hash].participants.length * 382 / 10000;
+      uint creatorReward = tenFaces + tenFaces * polls[_hash].participants.length * 382 / 10000;
       if (faceTokenRewardPool < creatorReward) {
         creatorReward = faceTokenRewardPool;
       }
       rewardFaceTokens(polls[_hash].creator, creatorReward);
+      polls[_hash].rewardsTo[polls[_hash].creator] = creatorReward;
       if (faceTokenRewardPool > 0) {
-        uint participantReward = oneFace * 618 / 1000;
+        uint participantReward = tenFaces * 618 / 1000;
         for (uint i = 0; i < polls[_hash].participants.length; i++) {
           if (!polls[_hash].wonBy[polls[_hash].participants[i]]) {
             if (faceTokenRewardPool < participantReward) {
               rewardFaceTokens(polls[_hash].participants[i], faceTokenRewardPool);
+              polls[_hash].rewardsTo[polls[_hash].participants[i]] = faceTokenRewardPool;
               break;
             } else {
               rewardFaceTokens(polls[_hash].participants[i], participantReward);
+              polls[_hash].rewardsTo[polls[_hash].participants[i]] = participantReward;
             }
           }
         }
@@ -313,7 +317,7 @@ contract FaceWorthPollFactory is Owned {
       uint prize = lowestPrize;
       for (uint i = winnerCount; i > 0; i--) {
         polls[_hash].winners[i - 1].transfer(prize);
-        polls[_hash].prizeBy[polls[_hash].winners[i - 1]] = prize;
+        polls[_hash].prizeTo[polls[_hash].winners[i - 1]] = prize;
         totalPrizeBy[polls[_hash].winners[i - 1]] += prize;
         prize += step;
       }
@@ -520,8 +524,17 @@ contract FaceWorthPollFactory is Owned {
     return polls[_hash].winners;
   }
 
-  function getPrize(bytes32 _hash, address winner) external view returns (uint) {
-    return polls[_hash].prizeBy[winner];
+  function getResult(bytes32 _hash, address winner) external view
+    returns (
+      uint prize,
+      uint rewards,
+      uint8 worth
+    )
+  {
+    require(polls[_hash].currentStage == ENDED);
+    prize = polls[_hash].prizeTo[winner];
+    rewards = polls[_hash].rewardsTo[winner];
+    worth = polls[_hash].worthBy[winner];
   }
 
   function getTotalPrize(address winner) external view returns (uint) {
@@ -599,7 +612,7 @@ contract FaceWorthPollFactory is Owned {
 
   event StageChange(bytes32 hash, uint8 newStage, uint8 oldStage, uint blockNumber);
 
-  event Refund(bytes32 hash, address recepient, uint fund);
+  event Refund(bytes32 hash, address recipient, uint fund);
 
   event Commit(bytes32 hash, address committer);
 
