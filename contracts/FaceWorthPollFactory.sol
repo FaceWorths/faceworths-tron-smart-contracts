@@ -42,7 +42,7 @@ contract FaceWorthPollFactory is Owned {
   uint public maxParticipants = 618; // this number affects distributePrize algorithm's effectiveness
   uint public winnersPerThousand = 382; // 1000 * distPercentage / winnersPerThousand must be greater than 100,
   uint public distPercentage = 85; // so that winners prize is greater than the stake
-  uint public minWaitBlocks = 10; // 10 blocks is about 30 seconds
+  uint public minWaitBlocks = 10;
   address public faceTokenAddress;
   uint256 public faceTokenRewardPool;
 
@@ -61,15 +61,6 @@ contract FaceWorthPollFactory is Owned {
     faceTokenRewardPool = faceToken.totalSupply() * 618 / 1000;
     tenFaces = 10 ** faceToken.decimals() * 10;
   }
-
-  event FaceWorthPollCreated (
-    bytes32 indexed hash,
-    address indexed creator,
-    bytes32 indexed faceHash,
-    uint startBlock,
-    uint commitEndBlock,
-    uint revealEndBlock
-  );
 
   function createFaceWorthPoll(
     bytes32 _faceHash,
@@ -112,7 +103,6 @@ contract FaceWorthPollFactory is Owned {
     polls[_hash].saltedWorthHashBy[msg.sender] = _saltedWorthHash;
     polls[_hash].committedBy[msg.sender] = true;
     polls[_hash].participants.push(msg.sender);
-    emit Commit(_hash, msg.sender);
     if (polls[_hash].participants.length >= maxParticipants) {
       polls[_hash].currentStage = REVEALING;
       emit StageChange(_hash, REVEALING, COMMITTING, block.number);
@@ -130,11 +120,6 @@ contract FaceWorthPollFactory is Owned {
     polls[_hash].revealedBy[msg.sender] = true;
     polls[_hash].revealCount++;
     polls[_hash].totalWorth += _worth;
-    emit Reveal(_hash, msg.sender, _worth);
-    if (polls[_hash].revealCount == polls[_hash].participants.length) {
-      emit EarlyReveal(_hash, block.number, polls[_hash].revealEndBlock);
-      polls[_hash].revealEndBlock = block.number;
-    }
   }
 
   function cancel(bytes32 _hash) external {
@@ -171,7 +156,6 @@ contract FaceWorthPollFactory is Owned {
       if (!polls[_hash].refundTo[polls[_hash].participants[i]]) {
         polls[_hash].refundTo[polls[_hash].participants[i]] = true;
         polls[_hash].participants[i].transfer(stake);
-        emit Refund(_hash, polls[_hash].participants[i], stake);
       }
     }
   }
@@ -264,7 +248,6 @@ contract FaceWorthPollFactory is Owned {
     if (polls[_hash].worthBy[_sortedParticipants[_turningPoint]] * polls[_hash].revealCount == _totalWorth) {
       polls[_hash].winners.push(_sortedParticipants[_turningPoint]);
       polls[_hash].wonBy[_sortedParticipants[_turningPoint]] = true;
-      emit Win(_hash, _sortedParticipants[_turningPoint], polls[_hash].worthBy[_sortedParticipants[_turningPoint]]);
       count++;
       rightIndex++;
       if (leftIndex > 0) leftIndex--;
@@ -281,13 +264,11 @@ contract FaceWorthPollFactory is Owned {
       if (rightIndex < _sortedParticipants.length && rightDiff <= leftDiff) {
         polls[_hash].winners.push(_sortedParticipants[rightIndex]);
         polls[_hash].wonBy[_sortedParticipants[rightIndex]] = true;
-        emit Win(_hash, _sortedParticipants[rightIndex], polls[_hash].worthBy[_sortedParticipants[rightIndex]]);
         count++;
         rightIndex++;
       } else if (rightIndex >= _sortedParticipants.length || rightIndex < _sortedParticipants.length && rightDiff > leftDiff) {
         polls[_hash].winners.push(_sortedParticipants[leftIndex]);
         polls[_hash].wonBy[_sortedParticipants[leftIndex]] = true;
-        emit Win(_hash, _sortedParticipants[leftIndex], polls[_hash].worthBy[_sortedParticipants[leftIndex]]);
         count++;
         if (leftIndex > 0) leftIndex--;
         else rightIndex++;
@@ -549,8 +530,7 @@ contract FaceWorthPollFactory is Owned {
       uint remainder = _v % 10;
       _v = _v / 10;
       reversed[i++] = byte(48 + remainder);
-    }
-    while (_v != 0);
+    } while (_v != 0);
 
     bytes memory concatenated = bytes(_str);
     bytes memory s = new bytes(concatenated.length + i);
@@ -590,35 +570,25 @@ contract FaceWorthPollFactory is Owned {
     }
   }
 
-  function updateMinWaitBlocks(uint _minWaitBlocks) external onlyOwner {
-    require(_minWaitBlocks != minWaitBlocks);
-    uint oldMinWaitBlocks = minWaitBlocks;
-    minWaitBlocks = _minWaitBlocks;
-    emit MinWaitBlocksUpdate(minWaitBlocks, oldMinWaitBlocks);
-  }
-
   function withdraw(uint _amount) external onlyOwner {
     require(address(this).balance >= _amount);
     msg.sender.transfer(_amount);
   }
+
+  event FaceWorthPollCreated (
+    bytes32 indexed hash,
+    address indexed creator,
+    bytes32 indexed faceHash,
+    uint startBlock,
+    uint commitEndBlock,
+    uint revealEndBlock
+  );
+
+  event StageChange(bytes32 hash, uint8 newStage, uint8 oldStage, uint blockNumber);
 
   event StakeUpdate(uint newStake, uint oldStake);
 
   event RewardRatiosUpdate(uint newWinnersPerThousand, uint oldWinnersPerThousand);
 
   event DistPercentageUpdate(uint newDistPercentage, uint oldDistPercentage);
-
-  event MinWaitBlocksUpdate(uint newMinWaitBlocks, uint oldMinWaitBlocks);
-
-  event StageChange(bytes32 hash, uint8 newStage, uint8 oldStage, uint blockNumber);
-
-  event Refund(bytes32 hash, address recipient, uint fund);
-
-  event Commit(bytes32 hash, address committer);
-
-  event Reveal(bytes32 hash, address revealor, uint8 worth);
-
-  event Win(bytes32 hash, address winner, uint8 worth);
-
-  event EarlyReveal(bytes32 hash, uint newRevealEndBlock, uint oldRevealEndBlock);
 }
