@@ -171,7 +171,7 @@ contract FaceWorthPollFactory is Owned {
       uint turningPoint = getTurningPoint(_hash, polls[_hash].totalWorth, sortedParticipants);
 
       // reverse those who give lower than average but the same FaceWorth so that the earlier participant is closer to the turning point
-      if (turningPoint > 0) {
+      if (turningPoint > 1) {
         uint p = turningPoint - 1;
         while (p > 0) {
           uint start = p;
