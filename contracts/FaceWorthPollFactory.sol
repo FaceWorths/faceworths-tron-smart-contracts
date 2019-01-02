@@ -204,7 +204,7 @@ contract FaceWorthPollFactory is Owned {
 
     rewardFaceTokens(_hash);
 
-    emit StageChange(_hash, ENDED, REVEALING, block.number);
+    emit StageChange(_hash, ENDED, REVEALING);
   }
 
   function rewardFaceTokens(bytes32 _hash) private {
@@ -584,7 +584,7 @@ contract FaceWorthPollFactory is Owned {
     uint revealEndBlock
   );
 
-  event StageChange(bytes32 hash, uint8 newStage, uint8 oldStage, uint blockNumber);
+  event StageChange(bytes32 hash, uint8 newStage, uint8 oldStage);
 
   event StakeUpdate(uint newStake, uint oldStake);
 
