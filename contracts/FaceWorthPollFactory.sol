@@ -214,7 +214,7 @@ contract FaceWorthPollFactory is Owned {
         creatorReward = faceTokenRewardPool;
       }
       rewardFaceTokens(polls[_hash].creator, creatorReward);
-      polls[_hash].rewardsTo[polls[_hash].creator] += creatorReward;
+      polls[_hash].rewardsTo[polls[_hash].creator] = creatorReward;
       if (faceTokenRewardPool > 0) {
         uint participantReward = tenFaces * 618 / 1000;
         for (uint i = 0; i < polls[_hash].participants.length; i++) {
