@@ -214,18 +214,18 @@ contract FaceWorthPollFactory is Owned {
         creatorReward = faceTokenRewardPool;
       }
       rewardFaceTokens(polls[_hash].creator, creatorReward);
-      polls[_hash].rewardsTo[polls[_hash].creator] = creatorReward;
+      polls[_hash].rewardsTo[polls[_hash].creator] += creatorReward;
       if (faceTokenRewardPool > 0) {
         uint participantReward = tenFaces * 618 / 1000;
         for (uint i = 0; i < polls[_hash].participants.length; i++) {
           if (!polls[_hash].wonBy[polls[_hash].participants[i]]) {
             if (faceTokenRewardPool < participantReward) {
               rewardFaceTokens(polls[_hash].participants[i], faceTokenRewardPool);
-              polls[_hash].rewardsTo[polls[_hash].participants[i]] = faceTokenRewardPool;
+              polls[_hash].rewardsTo[polls[_hash].participants[i]] += faceTokenRewardPool;
               break;
             } else {
               rewardFaceTokens(polls[_hash].participants[i], participantReward);
-              polls[_hash].rewardsTo[polls[_hash].participants[i]] = participantReward;
+              polls[_hash].rewardsTo[polls[_hash].participants[i]] += participantReward;
             }
           }
         }
@@ -280,6 +280,7 @@ contract FaceWorthPollFactory is Owned {
     uint totalPrize = stake * polls[_hash].participants.length * distPercentage / 100;
     uint winnerCount = polls[_hash].winners.length;
     if (winnerCount == 1) {
+      polls[_hash].prizeTo[polls[_hash].winners[0]] = totalPrize;
       totalPrizeTo[polls[_hash].winners[0]] += totalPrize;
       polls[_hash].winners[0].transfer(totalPrize);
     } else {
@@ -297,9 +298,9 @@ contract FaceWorthPollFactory is Owned {
       uint lowestPrize = (totalPrize * 2 + step * winnerCount - step * (winnerCount ** 2)) / (2 * winnerCount);
       uint prize = lowestPrize;
       for (uint i = winnerCount; i > 0; i--) {
-        polls[_hash].winners[i - 1].transfer(prize);
         polls[_hash].prizeTo[polls[_hash].winners[i - 1]] = prize;
         totalPrizeTo[polls[_hash].winners[i - 1]] += prize;
+        polls[_hash].winners[i - 1].transfer(prize);
         prize += step;
       }
     }
