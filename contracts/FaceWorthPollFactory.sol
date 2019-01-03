@@ -105,7 +105,7 @@ contract FaceWorthPollFactory is Owned {
     polls[_hash].participants.push(msg.sender);
     if (polls[_hash].participants.length >= maxParticipants) {
       polls[_hash].currentStage = REVEALING;
-      emit StageChange(_hash, REVEALING, COMMITTING, block.number);
+      emit StageChange(_hash, REVEALING, COMMITTING);
     }
   }
 
@@ -127,7 +127,7 @@ contract FaceWorthPollFactory is Owned {
     require(polls[_hash].currentStage == COMMITTING);
 
     polls[_hash].currentStage = CANCELLED;
-    emit StageChange(_hash, CANCELLED, COMMITTING, block.number);
+    emit StageChange(_hash, CANCELLED, COMMITTING);
     refund(_hash);
   }
 
@@ -137,12 +137,12 @@ contract FaceWorthPollFactory is Owned {
       if (block.number > polls[_hash].commitEndBlock) {
         if (polls[_hash].participants.length < minParticipants) {
           polls[_hash].currentStage = TIMEOUT;
-          emit StageChange(_hash, TIMEOUT, COMMITTING, block.number);
+          emit StageChange(_hash, TIMEOUT, COMMITTING);
           refund(_hash);
         } else if (block.number <= polls[_hash].revealEndBlock) {
           if (polls[_hash].currentStage != REVEALING) {
             polls[_hash].currentStage = REVEALING;
-            emit StageChange(_hash, REVEALING, COMMITTING, block.number);
+            emit StageChange(_hash, REVEALING, COMMITTING);
           }
         } else if(polls[_hash].currentStage != ENDED) {
           endPoll(_hash);
