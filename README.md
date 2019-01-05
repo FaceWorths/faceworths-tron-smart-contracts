@@ -22,11 +22,11 @@ The FaceWorthPollFactory contract implements
 
 The winners are those whose score are closest to final average score. The ratio of winners is 38.2% (golden ratio). If there are 1000 participants, there will be 382 winners. 100 participants will have 38 winners. 10 participants will have 3 winners. 3 participants will have 1 winner.
 
-The winners are selected based on their score. The ranking is based on
+The winners are selected based on their score, so if a player only commits but does not reveal score, she/he will not be selected as winner. The ranking is based on
 
-1. The closer the score is to final average, the higher rank
+1. The closer the score is to final average, the higher rank.
 2. If a low score and a high score are the same distance to the final average, the high score has higher rank.
-3. If the score is the same, the earlier who commits, the higher rank
+3. If the score is the same, the earlier who commits, the higher rank.
 
 E.g. 
 
@@ -36,8 +36,18 @@ E.g.
 
 ### The rule to distribute prize
 
-The prize will be based on winners' ranking. The higher the rank is, the bigger prize is. The minimum prize step is 1 TRX and the max is 100 TRX.
+The prize will be based on winners' ranking. The higher the rank is, the bigger prize is. The minimum prize step is 1 TRX and the max step is 100 TRX.
+85% of total stake will go to winners. E.g. 
+
+Assuming every player reveals their score,
+- When there are 6 players, total stake will be 600 TRX, 85% of which (510 TRX) will go to 2 winners. Lowest prize will be 205 TRX, highest prize will be 305 TRX, prize step is 100 TRX.
+- When there are 618 players, total stake will 61800 TRX, 85% of which (52530 TRX) will go to 236 winners. Lowest prize will be 105 TRX, second lowest prize will be 106 TRX, ..., highest prize will be 340 TRX, prize step is 1.
+
+If a player only commits but does not reveal the score, she/he will lose the stake, and 85% of her/his stake will go to prize pool.
+
 
 ### The rule to reward tokens
+
+
 
 ### The rule to find top faces
