@@ -14,9 +14,9 @@ The FaceWorthPollFactory contract implements
 * a rule to reward tokens to FaceWorth poll and other participants who do not win.
 * a rule to find top faces
 
-### Different stages of a FaceWorth poll
+### Different stages of a FaceWorth poll game
 
-
+A FaceWorth poll game starts with Commit stage, move to Reveal stage and then Ended stage, or move to Cancelled stage if there are less than 3 players during Commit stage.
 
 ### The rule to find winners
 
@@ -46,8 +46,18 @@ Assuming every player reveals their score,
 If a player only commits but does not reveal the score, she/he will lose the stake, and 85% of her/his stake will go to prize pool.
 
 
-### The rule to reward tokens
+### The rule to reward FACE tokens
 
+The FaceWorth poll game creator will receive 10 FACE tokens, and then 0.382 tokens per player. Say if there are 100 players, the game creator will receive 48.2 FACE tokens. 
 
+Each game player will receive 6.18 FACE tokens if she/he does not win any TRX.
+
+If a game is cancelled because there are less than 3 players, then neither game creator or game players will receive any token.
 
 ### The rule to find top faces
+
+We count not only average score of a face but also how many people who give scores. The final score is calculated as
+* Final_Score = Average_Score * Sqrt (Players * 10). 
+
+E.g., if a game has 10 players, but only 8 of them reveal their scores. The total score of the 8 is 720. Then the Average score is 720 / 8 = 90, and the final score will be 90 * Sqrt (10 * 10) = 900. 
+All faces will be ranked based on the final score calculated.
